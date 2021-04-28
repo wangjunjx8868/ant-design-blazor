@@ -54,9 +54,12 @@ namespace AntDesign
         [Parameter] public bool ShowSearch { get; set; }
 
         /// <summary>
-        /// 选择完成后的回调(参数为选中的节点集合及选中值)
+        /// Please use SelectedNodesChanged instead.
         /// </summary>
+        [Obsolete("Instead use SelectedNodesChanged.")]
         [Parameter] public Action<List<CascaderNode>, string, string> OnChange { get; set; }
+
+        [Parameter] public EventCallback<CascaderNode[]> SelectedNodesChanged { get; set; }
 
         [Parameter]
         public IReadOnlyCollection<CascaderNode> Options
@@ -119,6 +122,7 @@ namespace AntDesign
         private SelectedTypeEnum SelectedType { get; set; }
 
         private string _displayText;
+        private bool _initialized;
 
         private static Dictionary<string, string> _sizeMap = new Dictionary<string, string>()
         {
@@ -144,13 +148,8 @@ namespace AntDesign
             _menuClassMapper
                 .Add("ant-cascader-menu")
                 .If($"ant-cascader-menu-rtl", () => RTL);
-        }
 
-        protected override void OnParametersSet()
-        {
-            base.OnParametersSet();
-
-            ProcessParentAndDefault();
+            SetDefaultValue(Value ?? DefaultValue);
         }
 
         protected override void OnValueChange(string value)
@@ -212,7 +211,7 @@ namespace AntDesign
             _selectedNodes.Clear();
             _hoverSelectedNodes.Clear();
             _displayText = string.Empty;
-            CurrentValueAsString = string.Empty;
+            SetValue(string.Empty);
         }
 
         /// <summary>
@@ -361,14 +360,16 @@ namespace AntDesign
         /// <param name="defaultValue"></param>
         private void SetDefaultValue(string defaultValue)
         {
-            if (string.IsNullOrWhiteSpace(defaultValue))
-                return;
+            if (!string.IsNullOrWhiteSpace(defaultValue))
+            {
+                _selectedNodes.Clear();
+                var node = GetNodeByValue(_nodelist, defaultValue);
+                SetSelectedNodeWithParent(node, ref _selectedNodes);
+                _renderNodes = _selectedNodes;
+                SetValue(node?.Value);
+            }
 
-            _selectedNodes.Clear();
-            var node = GetNodeByValue(_nodelist, defaultValue);
-            SetSelectedNodeWithParent(node, ref _selectedNodes);
-            _renderNodes = _selectedNodes;
-            SetValue(node?.Value);
+            _initialized = true;
         }
 
         /// <summary>
@@ -382,6 +383,11 @@ namespace AntDesign
             if (Value != value)
             {
                 CurrentValueAsString = value;
+
+                if (_initialized && SelectedNodesChanged.HasDelegate)
+                {
+                    SelectedNodesChanged.InvokeAsync(_selectedNodes.ToArray());
+                }
             }
         }
 
